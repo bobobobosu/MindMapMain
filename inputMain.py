@@ -1,15 +1,6 @@
-import itertools
 import os
-
-import jieba
-import nltk
-import sys
-from nltk import word_tokenize
-
-
-from tkinter.filedialog import askopenfilename
 from shutil import copyfile
-from datetime import datetime
+from tkinter.filedialog import askopenfilename
 
 from utils.tkGUI import tkGUI
 
@@ -29,7 +20,7 @@ class inputMain:
 
 
     def rawinput(self):
-        got = tkGUI(['apple', 'banana', 'CranBerry', 'dogwood', 'alpha', 'Acorn', 'Anise'])
+        got = tkGUI([''])
         print("trainconfig")
         print(bool(got[1]))
         self.TrainConfig = bool(got[1])
@@ -74,7 +65,7 @@ class inputMain:
         return self.TrainConfig
 
     def addobj(self,name):
-        test_list = ('apple', 'banana', 'CranBerry', 'dogwood', 'alpha', 'Acorn', 'Anise' )
+        test_list = ('')
         print(type(tkGUI(test_list)))
         inputSubjectString =input('\nPlz input '+name+':')
         inputSubjectString = inputSubjectString.rstrip()

@@ -1,18 +1,27 @@
-import os
-
+import ftplib
 import itertools
+import json
+import multiprocessing
+import os
+import shutil
+import threading
+import time
 
 from NeuralNetwork.RNN import printNetwork, RNNinterface
 from NeuralNetwork.drawGraph import drawGraphClass
-from constructNetwork import json_network
-from inputMain import inputMain
-from constructNetwork.json_network import json2network
 from constructNetwork.addNeuron import addNeuron
+from constructNetwork.json_network import json2network
+from filestorage.utils import retMD5
+from inputMain import inputMain
 
+train_and_sync_mode='server'
 Paths = {'jsonNetworkDump': 'NetworkDump.json',
          'pklNetworkDumo': 'NetworkDump.pkl',
          'pklTrainDataDump': 'TrainDataDump.pkl'}
-
+server = 'ssmsynology.synology.me'
+username = 'nickisverygood'
+password = 'sbi8844848'
+remote_path = "/homes/nickisverygood/DynamicMindMap/"
 
 def Delete(Paths, deljsonDump=False, delpklDump=False, delTrainData=False):
     if deljsonDump == True:
@@ -86,50 +95,157 @@ def draw():
     mDraw.drawGraph(k)
 
 
-while True:
-    newInputs = []
-    mnewinput = None
-
-    # get input
-    mnewinput = inputMain()
-    mnewinput.rawinput()
-    newInputs.append(mnewinput)
-    # add autoGen
-    #newInputs = newInputs + autoGenList(mnewinput).getminputLists()
-
-    if (detectException(mnewinput.getinputList()) == True):
-        continue
+def getFileListFTP(ftp_connection):
+    try:
+        files = ftp_connection.nlst()
+        return files
+    except ftplib.error_perm as resp:
+        if str(resp) == "550 No files found":
+            print ("No files in this directory")
+        else:
+            raise
+        return None
 
 
 
-    # if Train Mode
-    if mnewinput.trainORactivate_sta == 1:
-        for newInput in newInputs:
-            addNeuron(newInput.getinputList(), newInput.getsubjectList(), newInput.getreactionList())
-            print("MODE: Training")
+def train_and_sync(mode='local'):
+    if mode=='local':
+        f_NetworkDump_name = 'NetworkDump_'+retMD5.md5("NetworkDump.json")
+        f_TrainDataDump_name = 'TrainDataDump_'+retMD5.md5("TrainDataDump.pkl")
+        #update current
+        latest_file_list = {'NetworkDump':'','TrainDataDump':'','mnetwork':''}
+        latest_file_list['NetworkDump'] = f_NetworkDump_name
+        latest_file_list['TrainDataDump'] = f_TrainDataDump_name
+        latest_file_list['mnetwork'] = os.path.splitext(retMD5.md5('NetworkDump.json'))[0]+'_'+ os.path.splitext(retMD5.md5('TrainDataDump.pkl'))[0]+".pkl"
+        latest_file_list_file = open('latest_file_list', 'wb')
+        json.dump(latest_file_list,open("latest_file_json",'w'),indent=4)
 
-            # add Neuron
+        #ftp
+        try:
+            ftp_connection = ftplib.FTP(server, username, password)
+            ftp_connection.cwd(remote_path)
+            files = getFileListFTP(ftp_connection)
+            ftp_connection.storbinary('STOR latest_file_json', open('latest_file_json', 'rb'))
+            ftp_connection.storbinary('STOR '+f_NetworkDump_name,  open("NetworkDump.json", 'rb'))
+            ftp_connection.storbinary('STOR '+f_TrainDataDump_name,  open("TrainDataDump.pkl",'rb'))
+        except:
+            print('FTP error!!')
+        #local
+        shutil.copy2("latest_file_json",'_History/'+"latest_file_json")
+        shutil.copy2("NetworkDump.json",'_History/'+f_NetworkDump_name)
+        shutil.copy2("TrainDataDump.pkl",'_History/'+f_TrainDataDump_name)
 
-            # train
-            print(newInput.getTrainConfig())
-            # train pics
+        #replace if upate exists - ftp
+        if latest_file_list['mnetwork'] in files:
+            fh = open("NetworkDump.pkl", 'rb')
+            ftp_connection.retrbinary('RETR %s' % latest_file_list['mnetwork'], fh.write)
+        #replace if update exists - local
+            shutil.copy2('_History/'+latest_file_list['mnetwork'],"NetworkDump.pkl")
 
-            # train others
-            RNNinterface(newInput.subjectList, newInput.getreactionList(), json2network(), Mode='Activate')
-            RNNinterface(newInput.getsubjectList(), newInput.getreactionList(), json2network(), Mode='Train',
-                         PLKnetwork_PATH=Paths.get('pklNetworkDumo'), train=newInput.getTrainConfig())
+    elif mode=='server':
+        #FTP stuff
+        ftp_connection = ftplib.FTP(server, username, password)
+        ftp_connection.cwd(remote_path)
+        files = getFileListFTP(ftp_connection)
 
-    # if Activation Mode
-    else:
-        print("MODE: Activation")
-        addNeuron(mnewinput.getinputList(), mnewinput.getsubjectList(), mnewinput.getreactionList())
-        RNNinterface(mnewinput.subjectList, mnewinput.getsubjectList(), json2network(), Mode='Activate')
-        #RNNinterface(mnewinput.getsubjectList(), mnewinput.getsubjectList(), json2network(), Mode='Train',
-        #                 PLKnetwork_PATH=Paths.get('pklNetworkDumo'), trainpend=False)
+        ftp_connection.retrbinary('RETR %s' % 'latest_file_json', open('latest_file_json', 'wb').write)
+        try:
+            latest_file_list = json.load(open("latest_file_json",'r'))
+            print(latest_file_list['mnetwork'])
+            if latest_file_list['mnetwork'] not in files:
+                RNNinterface([],[], json2network(), Mode='Train',
+                             PLKnetwork_PATH='NetworkDump.pkl', train=True,maxEpochs=None)
+                ftp_connection.storbinary('STOR '+str(latest_file_list['mnetwork']),open(Paths.get('pklNetworkDumo'),'rb'))
+        except:
+            print('FTP error!!')
+    elif mode == 'localserver':
+        try:
+            latest_file_list = json.load(open("latest_file_json",'r'))
+            print(latest_file_list['mnetwork'])
 
-        # mtree = json_network.geneJson2Tree('a').getTree()
-        # print(mtree)
-        # draw()
+            if latest_file_list['mnetwork'] not in os.listdir('_History/'):
+                RNNinterface([],[], json2network(), Mode='Train',
+                             PLKnetwork_PATH='NetworkDump.pkl', train=True,maxEpochs=None)
+                shutil.copy2("NetworkDump.pkl",'_History/'+latest_file_list['mnetwork'])
+        except:
+
+            print('error')
 
 
-        # Activate
+#upload
+class trainandsync_local(threading.Thread):
+    def run(self):
+        train_and_sync("local")
+def trainandsync_servers(mode):
+    train_and_sync(mode=mode)
+
+if __name__ == "__main__":
+    while train_and_sync_mode in ['localserver' , 'server']:
+                curr = json.load(open("latest_file_json",'r'))['mnetwork']
+                p = multiprocessing.Process(target=trainandsync_servers, args=(train_and_sync_mode,))
+                p.start()
+                while p.is_alive():
+                    latest_file_list = json.load(open("latest_file_json",'r'))
+                    time.sleep(1)
+                    print('testing...')
+                    print(curr)
+                    print(latest_file_list['mnetwork'])
+                    filelist =  os.listdir('_History/')
+                    if curr!=latest_file_list['mnetwork']:
+                        print("THERE IS NEW")
+                        p.terminate()
+                        break
+
+    while train_and_sync_mode == 'local':
+        print('local')
+        newInputs = []
+        mnewinput = None
+
+        # get input
+        mnewinput = inputMain()
+        mnewinput.rawinput()
+        newInputs.append(mnewinput)
+        # add autoGen
+        #newInputs = newInputs + autoGenList(mnewinput).getminputLists()
+
+        if (detectException(mnewinput.getinputList()) == True):
+            continue
+
+
+
+        # if Train Mode
+        if mnewinput.trainORactivate_sta == 1:
+            for newInput in newInputs:
+                addNeuron(newInput.getinputList(), newInput.getsubjectList(), newInput.getreactionList())
+                print("MODE: Training")
+
+                # add Neuron
+
+                # train
+                print(newInput.getTrainConfig())
+                # train pics
+
+                # train others
+                RNNinterface(newInput.subjectList, newInput.getreactionList(), json2network(), Mode='Activate')
+                RNNinterface(newInput.getsubjectList(), newInput.getreactionList(), json2network(), Mode='Train',
+                             PLKnetwork_PATH=Paths.get('pklNetworkDumo'), train=newInput.getTrainConfig())
+
+        # if Activation Mode
+        else:
+            print("MODE: Activation")
+            addNeuron(mnewinput.getinputList(), mnewinput.getsubjectList(), mnewinput.getreactionList())
+            RNNinterface(mnewinput.subjectList, mnewinput.getsubjectList(), json2network(), Mode='Activate')
+            #RNNinterface(mnewinput.getsubjectList(), mnewinput.getsubjectList(), json2network(), Mode='Train',
+            #                 PLKnetwork_PATH=Paths.get('pklNetworkDumo'), trainpend=False)
+
+            # mtree = json_network.geneJson2Tree('a').getTree()
+            # print(mtree)
+            # draw()
+
+
+            # Activate
+
+        mtrainandsync_local = trainandsync_local()
+        mtrainandsync_local.start()
+
+

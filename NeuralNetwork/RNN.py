@@ -1,25 +1,13 @@
 # -*- coding: utf-8 -*-
-import json
-import operator
+import copy
+import os
 import pickle
 
-import collections
 from pybrain.datasets.supervised import SupervisedDataSet
 from pybrain.structure import *
-import pybrain.structure.networks
 from pybrain.structure.connections.full import FullConnection
 from pybrain.structure.modules.sigmoidlayer import SigmoidLayer
-from pybrain.structure.networks.recurrent import RecurrentNetwork
-import pybrain.tests
 from pybrain.supervised.trainers.backprop import BackpropTrainer
-
-import pybrain.supervised.trainers
-import pybrain.supervised.trainers
-
-import os
-import copy
-
-from pybrain.tools.shortcuts import buildNetwork
 
 from constructNetwork.json_network import json2network
 
@@ -106,11 +94,16 @@ def buildNetworkfromFlat(mFlatNetwork):
         mnetwork[0].addModule(currNeuron)
         mnetwork[0].addOutputModule(thisout)
         mnetwork[0].addConnection(FullConnection(thisin,currNeuron))
+        #for direct
+        #mnetwork[0].addConnection(FullConnection(currNeuron,thisout))
+
+    # multilayer
 
     for thisout in mOutLayer:
         for currNeuron in mHiddenLayer:
             mnetwork[0].addConnection(FullConnection(currNeuron[0],thisout))
             #mnetwork[0].addConnection(FullConnection(currNeuron,thisout))
+    
 
     # 建立連接
     for d in listNetwork:
@@ -145,7 +138,7 @@ def buildNetworkfromFlat(mFlatNetwork):
     return mnetwork[0]
 
 
-def NetworkBuild(listNetwork=json2network(), file='NetworkDump.pkl', new=False):
+def NetworkBuild(listNetwork=json2network(), file='NetworkDump.pkl', new=True):
     listNetwork = json2network()
     # 匯入網路
     ##get all nerons
@@ -210,7 +203,7 @@ def NetworkActivation(reactionList, mnetwork=NetworkBuild()):
     return [[i[0], i[1]] for i in resultList]
 
 
-def NetworkTrain(trainDataSet, mnetwork=NetworkBuild(), file='NetworkDump.pkl'):
+def NetworkTrain(trainDataSet, mnetwork=NetworkBuild(), file='NetworkDump.pkl',maxEpochs=100):
     mnetwork = NetworkBuild(new=True)
 
     print('DEBUG')
@@ -238,7 +231,7 @@ def NetworkTrain(trainDataSet, mnetwork=NetworkBuild(), file='NetworkDump.pkl'):
     trainer = BackpropTrainer(mnetwork[0], DS, verbose=True, learningrate=0.01)
     # 0.0575
     # maxEpochs即你需要的最大收敛迭代次数，这里采用的方法是训练至收敛，我一般设为1000
-    trainer.trainUntilConvergence(maxEpochs=1000)
+    trainer.trainUntilConvergence(maxEpochs=maxEpochs)
     '''
     for mod in mnetwork[0].modules:
         print "Module:", mod.name
@@ -277,7 +270,11 @@ def makeVector(inputList, mnetwork=NetworkBuild()):
 def Vec2ActiveList(inputVect, mnetwork=NetworkBuild()):
     mnetwork = NetworkBuild()
     #print("makeVector")
-    assert len(mnetwork[0].inmodules) == len(mnetwork[1].keys())
+    try:
+        assert len(mnetwork[0].inmodules) == len(mnetwork[1].keys())
+    except:
+        mnetwork = NetworkBuild(new = True)
+        assert len(mnetwork[0].inmodules) == len(mnetwork[1].keys())
 
     ActiveList = copy.copy(mnetwork[1])
     for i in range(0, len(inputVect)):
@@ -292,6 +289,7 @@ def Vec2ActiveList(inputVect, mnetwork=NetworkBuild()):
 
 
 def saveTrainData(subjectList, reactionList, PLKtraindata_PATH):
+
     if (len(subjectList) and len(reactionList)) != 0:
         trainDataRaw = []
         trainData = []
@@ -301,33 +299,34 @@ def saveTrainData(subjectList, reactionList, PLKtraindata_PATH):
         except:
             trainDataRaw = []
         for i in range(0, 1):
-            trainDataRaw.append([subjectList, reactionList])
+                trainDataRaw.append([subjectList, reactionList])
         for trainDataRaws in trainDataRaw:
             trainData.append([makeVector(trainDataRaws[0], NetworkBuild(new=True)),
                               makeVector((trainDataRaws[1]), NetworkBuild(new=True))])
 
         pickle.dump(trainDataRaw, open(PLKtraindata_PATH, 'wb'))
         return trainData
-    '''
+
     else:
         try:
             trainDataRaw = pickle.load(open(PLKtraindata_PATH, 'rb'))
             trainData = []
             for trainDataRaws in trainDataRaw:
-                trainData.append([makeVector(trainDataRaws[0]), makeVector((trainDataRaws[1]))])
+                trainData.append([makeVector(trainDataRaws[0], NetworkBuild(new=True)), makeVector((trainDataRaws[1]), NetworkBuild(new=True))])
 
             print('TRAIN:')
             print(trainDataRaw)
             pickle.dump(trainDataRaw, open(PLKtraindata_PATH, 'wb'))
             return trainData
         except:
+            raise
             print('No Train Data Exists')
             return []
-    '''
+
 
 
 def RNNinterface(subjectList, reactionList, JSONnetwork=json2network(), PLKnetwork_PATH='NetworkDump.pkl',
-                 PLKtraindata_PATH='TrainDataDump.pkl', Mode='Init', train=False):
+                 PLKtraindata_PATH='TrainDataDump.pkl', Mode='Init', train=False,maxEpochs=100):
     NetworkBuild(listNetwork=JSONnetwork, file=PLKnetwork_PATH)
 
     if Mode == 'Activate':
@@ -339,11 +338,12 @@ def RNNinterface(subjectList, reactionList, JSONnetwork=json2network(), PLKnetwo
         #    NetworkBuild(listNetwork=json2network(), file=PLKnetwork_PATH)
         return result
     if Mode == 'Train':
+
         trainData = saveTrainData(subjectList, reactionList, PLKtraindata_PATH=PLKtraindata_PATH)
         #print('Data to Train:')
         #print(trainData)
         if len(trainData) > 4 and train == True:
-            NetworkTrain(trainData)
+            NetworkTrain(trainData,maxEpochs=maxEpochs)
     if Mode == 'Build':
         NetworkBuild(listNetwork=JSONnetwork, file=PLKnetwork_PATH)
     if Mode == 'Clean':
@@ -358,3 +358,4 @@ def printNetwork(PLKnetwork_PATH='NetworkDump.pkl'):
     for imnetwork in mnetwork.modules:
         netList.append(str(imnetwork))'''
     return mnetwork[1]
+
