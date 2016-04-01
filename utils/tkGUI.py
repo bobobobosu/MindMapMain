@@ -352,9 +352,15 @@ def tkGUI(test_list):
             #data from combo
             if str(comboSubject.get()) != "" and str(comboSubject.get()) not in inputList["subjectList"]:
                 for toappend in macro_expand([comboSubject.get()]):
+                    # display text
+                    textViewer.delete(1.0, END)
+                    textViewer.insert(1.0, toappend)
                     inputList["subjectList"].append(toappend)
             if str(comboReaction.get()) != "" and str(comboReaction.get()) not in inputList["reactionList"] :
                 for toappend in macro_expand([comboReaction.get()]):
+                    # display text
+                    textViewer.delete(1.0, END)
+                    textViewer.insert(1.0, toappend)
                     inputList["reactionList"].append(toappend)
             #data from clipboard
             if target in ["subjectList","reactionList"]:
@@ -556,8 +562,9 @@ def tkGUI(test_list):
                 sub_rdiotoadd = list(set(sub_rdiotoadd))
                 appendupdateSticky_subject(addition=sub_rdiotoadd)
                 appendupdateSticky_reaction(addition=rec_rdiotoadd)
+            print("UPDATE TEXT")
 
-            if btn.get() != '':
+            if mhash != '':
                 #display text
                 textViewer.delete(1.0,END)
                 textViewer.insert(1.0, mhash)

@@ -14,7 +14,7 @@ from constructNetwork.json_network import json2network
 from filestorage.utils import retMD5
 from inputMain import inputMain
 
-train_and_sync_mode='localserver'
+train_and_sync_mode='local'
 Paths = {'jsonNetworkDump': 'NetworkDump.json',
          'pklNetworkDumo': 'NetworkDump.pkl',
          'pklTrainDataDump': 'TrainDataDump.pkl'}
