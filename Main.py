@@ -14,7 +14,7 @@ from constructNetwork.json_network import json2network
 from filestorage.utils import retMD5
 from inputMain import inputMain
 
-train_and_sync_mode='local'
+train_and_sync_mode='localserver'
 Paths = {'jsonNetworkDump': 'NetworkDump.json',
          'pklNetworkDumo': 'NetworkDump.pkl',
          'pklTrainDataDump': 'TrainDataDump.pkl'}
@@ -156,8 +156,8 @@ def train_and_sync(mode='local'):
                 RNNinterface([],[], json2network(), Mode='Train',
                              PLKnetwork_PATH='NetworkDump.pkl', train=True,maxEpochs=None)
                 ftp_connection.storbinary('STOR '+str(latest_file_list['mnetwork']),open(Paths.get('pklNetworkDumo'),'rb'))
-        except:
-            print('FTP error!!')
+        except Exception as ex:
+            print(ex)
     elif mode == 'localserver':
         try:
             latest_file_list = json.load(open("latest_file_json",'r'))
@@ -167,9 +167,8 @@ def train_and_sync(mode='local'):
                 RNNinterface([],[], json2network(), Mode='Train',
                              PLKnetwork_PATH='NetworkDump.pkl', train=True,maxEpochs=None)
                 shutil.copy2("NetworkDump.pkl",'_History/'+latest_file_list['mnetwork'])
-        except:
-
-            print('error')
+        except Exception as ex:
+            print(ex)
 
 
 #upload
@@ -181,22 +180,32 @@ def trainandsync_servers(mode):
 
 if __name__ == "__main__":
     while train_and_sync_mode in ['localserver' , 'server']:
+            time.sleep(1)
             try:
-                curr = json.load(open("latest_file_json",'r'))['mnetwork']
                 p = multiprocessing.Process(target=trainandsync_servers, args=(train_and_sync_mode,))
                 p.start()
+                try:
+                    curr = json.load(open("latest_file_json",'r'))['mnetwork']
+                except:
+                    print('latest_file_json ERROR')
+                    continue
+
                 while p.is_alive():
-                    latest_file_list = json.load(open('latest_file_json','r'))
                     time.sleep(1)
                     print('testing...')
-                    print(curr)
-                    print(latest_file_list['mnetwork'])
+
                     filelist =  os.listdir('_History/')
-                    if curr!=latest_file_list['mnetwork']:
-                        print("THERE IS NEW")
-                        p.terminate()
-                        break
-            except:
+                    try:
+                        latest_file_list = json.load(open('latest_file_json','r'))
+                        print(curr)
+                        print(latest_file_list['mnetwork'])
+                        if curr!=latest_file_list['mnetwork']:
+                            print("THERE IS NEW")
+                            p.terminate()
+                    except:
+                        continue
+            except Exception as ex:
+                print(ex)
                 continue
 
     while train_and_sync_mode == 'local':
