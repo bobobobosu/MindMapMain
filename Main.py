@@ -14,7 +14,7 @@ from constructNetwork.json_network import json2network
 from filestorage.utils import retMD5
 from inputMain import inputMain
 
-train_and_sync_mode='server'
+train_and_sync_mode='local'
 Paths = {'jsonNetworkDump': 'NetworkDump.json',
          'pklNetworkDumo': 'NetworkDump.pkl',
          'pklTrainDataDump': 'TrainDataDump.pkl'}
@@ -181,11 +181,12 @@ def trainandsync_servers(mode):
 
 if __name__ == "__main__":
     while train_and_sync_mode in ['localserver' , 'server']:
+            try:
                 curr = json.load(open("latest_file_json",'r'))['mnetwork']
                 p = multiprocessing.Process(target=trainandsync_servers, args=(train_and_sync_mode,))
                 p.start()
                 while p.is_alive():
-                    latest_file_list = json.load(open("latest_file_json",'r'))
+                    latest_file_list = json.load(open('latest_file_json','r'))
                     time.sleep(1)
                     print('testing...')
                     print(curr)
@@ -195,6 +196,8 @@ if __name__ == "__main__":
                         print("THERE IS NEW")
                         p.terminate()
                         break
+            except:
+                continue
 
     while train_and_sync_mode == 'local':
         print('local')
