@@ -13,12 +13,14 @@ import datetime
 import os
 import pickle
 import shutil
+import threading
 import tkinter
 import tkinter.ttk
 import urllib.parse
 import urllib.request
 import urllib.response
 import win32clipboard
+from operator import itemgetter
 from os import listdir
 from subprocess import call
 from tkinter import *
@@ -30,6 +32,7 @@ from autoGenList import autoGenList
 from constructNetwork.json_network import json2network, listofNeurons
 from filestorage.utils import retMD5
 from filestorage.utils.colortransform import val_to_hex
+from utils.voice_recognize import voice_recognize
 
 __version__ = "1.1"
 
@@ -39,7 +42,7 @@ pdfDATA_PATH = "_pdfDATA"
 _pdfDATAraw_PATH = "_pdfDATAraw"
 _tmp_PATH ="_tmp"
 tkinter_umlauts=['']
-columns = 60
+columns = 30
 global TrainConfig
 global inputList
 global var_subject_activateRdio
@@ -124,6 +127,7 @@ class AutocompleteCombobox(ttk.Combobox):
         def autocomplete(self, delta=0):
 
                 """autocomplete the Combobox, delta may be 0/1/-1 to cycle through possible hits"""
+
                 if delta: # need to delete selection otherwise we would fix the current position
                         self.delete(self.position, tkinter.END)
                 else: # set position to end so selection starts where textentry ended
@@ -149,7 +153,8 @@ class AutocompleteCombobox(ttk.Combobox):
                 self.position = self.position_copy
 
         def handle_keyrelease(self, event):
-                """event handler for the keyrelease event on this widget""" '''
+                """event handler for the keyrelease event on this widget"""
+
                 if event.keysym == "BackSpace":
                         self.delete(self.index(tkinter.INSERT), tkinter.END)
                         self.position = self.index(tkinter.END)
@@ -160,12 +165,15 @@ class AutocompleteCombobox(ttk.Combobox):
                         else:
                                 self.position = self.position-1 # delete one character
                                 self.delete(self.position, tkinter.END)
+'''
                 if event.keysym == "Right":
-                        self.position = self.index(tkinter.END) # go to end (no selection)
+                        self.position = self.index(tkinter.END) # go to end (no selec            tion)
                 if len(event.keysym) == 1:
                         self.autocomplete()
                 # No need for up/down, we'll jump to the popup
                 # list at the position of the autocompletion
+
+
 '''
 
 def gen_RAW2PRO_dict(RAW,PRO,path):
@@ -197,8 +205,6 @@ def tkGUI(test_list):
         sub_rdiotoadd = []
         try:
             previnputList = pickle.load(open('searchHistory', 'rb'))
-            print('thus prev')
-            print(previnputList)
         except:
             previnputList=[]
 
@@ -303,6 +309,10 @@ def tkGUI(test_list):
                 #clean tmp
                 os.remove(_tmp_file)
                 gen_RAW2PRO_dict(_pdfDATAraw_file_hash,_pdfDATA_file_hash,RAW2PRO_dict_path)
+            else:
+                RAW2PRO_dict = pickle.load(open(RAW2PRO_dict_path, 'rb'))
+                _pdfDATA_file_hash = [i['PRO'] for i in RAW2PRO_dict if i['RAW']==_pdfDATAraw_file_hash][0]
+                _pdfDATA_file = os.path.join(_pdfDATA_PATH,[i for i in os.listdir(_pdfDATA_PATH) if os.path.splitext(os.path.basename(i))[0] == _pdfDATA_file_hash][0])
 
             if mode == "Subject":
                 if _pdfDATAraw_file_hash not in inputList["subjectList"]:
@@ -320,19 +330,20 @@ def tkGUI(test_list):
 
         def updateinputListHistory():
             tmp = {"subjectList":inputList.copy()["subjectList"],"reactionList":inputList.copy()["reactionList"]}
-            if len(previnputList)<1000:
-                if len(previnputList)>0:
-                    if previnputList[len(previnputList)-1] != copy.deepcopy(tmp):
-                        #if previnputList[len(previnputList)-1] != inputList
+            if len(tmp["subjectList"])!=0 and len(tmp["reactionList"])!=0 :
+                if len(previnputList)<1000:
+                    if len(previnputList)>0:
+                        if previnputList[len(previnputList)-1] != copy.deepcopy(tmp):
+                            #if previnputList[len(previnputList)-1] != inputList
+                            previnputList.append(copy.deepcopy(tmp))
+                    else:
                         previnputList.append(copy.deepcopy(tmp))
+
+
                 else:
-                    previnputList.append(copy.deepcopy(tmp))
-
-
-            else:
-                if previnputList[len(previnputList)-1] != copy.deepcopy(tmp):
-                    previnputList.pop(0)
-                    previnputList.append(copy.deepcopy(tmp))
+                    if previnputList[len(previnputList)-1] != copy.deepcopy(tmp):
+                        previnputList.pop(0)
+                        previnputList.append(copy.deepcopy(tmp))
             return previnputList
 
 
@@ -374,6 +385,33 @@ def tkGUI(test_list):
                     for toappend in macro_expand([data]):
                         inputList["reactionList"].append(toappend)
             #data from radiobtn
+            # append
+            for i in range(0, columns - 3):
+                if var_subject_activateRdio[i].get() != "" and var_subject_activateRdio[i].get() not in inputList[
+                    "subjectList"]:
+                    inputList["subjectList"].append(var_subject_activateRdio[i].get())
+                var_subject_activateRdio[i].set("")
+            #print('inputList["subjectList"]')
+            #print(inputList["subjectList"])
+
+            # append
+            for i in range(0, columns - 3):
+                if var_reaction_activateRdio[i].get() != "" and var_reaction_activateRdio[i].get() not in inputList[
+                    "reactionList"]:
+                    toappend = [var_reaction_activateRdio[i].get()]
+                    toappend = macro_expand(toappend)
+                    for mtoappend in toappend:
+                        inputList["reactionList"].append(mtoappend)
+                        # var_reaction_activateRdio[i].set("")
+            nonlocal rec_rdiotoadd
+            nonlocal sub_rdiotoadd
+            #print("Pressed")
+            #print(sub_rdiotoadd)
+            #print(rec_rdiotoadd)
+            for i in sub_rdiotoadd:
+                inputList["subjectList"].append(i)
+            for j in rec_rdiotoadd:
+                inputList["reactionList"].append(j)
             appendupdateSticky_subject()
             appendupdateSticky_reaction()
 
@@ -407,9 +445,10 @@ def tkGUI(test_list):
                 inputList["subjectList"] = []
                 inputList["reactionList"] = []
 
-            nonlocal rec_rdiotoadd
+
+
             rec_rdiotoadd = []
-            nonlocal sub_rdiotoadd
+
             sub_rdiotoadd = []
             for var in var_subject_activateRdio:
                 var.set("")
@@ -449,26 +488,55 @@ def tkGUI(test_list):
 
 
         def appendupdateSticky_subject(addition=[]):
-            #append
-            for i in range(0,columns-3):
-                if var_subject_activateRdio[i].get() != "" and var_subject_activateRdio[i].get() not in inputList["subjectList"]:
-                    inputList["subjectList"].append(var_subject_activateRdio[i].get())
-                var_subject_activateRdio[i].set("")
+
             #update
-            activateList = RNNinterface(inputList["subjectList"]+addition+[i.get() for i in var_subject_activateRdio if i.get() != ""],[], json2network(), Mode='Activate')
+
+            #print(inputList["subjectList"]+addition+[i.get() for i in var_subject_activateRdio if i.get() != ""])
+
+            activateList = RNNinterface(list(set(inputList["subjectList"]+addition+sub_rdiotoadd+[i.get() for i in var_subject_activateRdio if i.get() != ""])),[], json2network(), Mode='Activate')
+            try:
+                if os.path.isfile('NetworkDump_base.pkl'):
+                    activateList_base = RNNinterface(list(set(
+                        inputList["subjectList"] + addition + sub_rdiotoadd + [i.get() for i in var_subject_activateRdio if i.get() != ""])), [], json2network(),
+                                                     Mode='Activate', PLKnetwork_PATH='NetworkDump_base.pkl')
+                    activateList.sort(key=itemgetter(1), reverse=True)
+                    activateList = activateList_base + [i for i in activateList if
+                                                        (i[0] not in [j[0] for j in activateList_base]) or (
+                                                        i[0] in [j[0] for j in activateList_base] and not i[1] > 0)]
+
+                    print('--------------------------------------------------------------')
+                    print("Replaced BY BASE")
+                    print(activateList_base)
+                    print('--------------------------------------------------------------')
+            except Exception as ex:
+                print(ex)
+            #print('ActivateSub:')
+            #print(list(set(inputList["subjectList"]+addition+[i.get() for i in var_subject_activateRdio if i.get() != ""])))
+            #print(activateList)
+
+
             pre_activateList =[]
             try:
-                if len([i for i in activateList if i[1] != 0.5]) == 0:
-                    pre_activateList = [[i["subjectList"][0],0.5] for i in previnputList if i["subjectList"]!=[]][::-1]+pre_activateList+activateList
+                if len(set([i[1] for i in activateList])) == 1 and len(activateList) >1:
+                    pre_activateList = [[i["reactionList"][0],0] for i in previnputList if i["reactionList"]!=[]][::-1]+[[i["subjectList"][0],0] for i in previnputList if i["subjectList"]!=[]][::-1]+pre_activateList+activateList
                 else:
                     pre_activateList=pre_activateList+activateList
             except:
                 pre_activateList=pre_activateList+activateList
 
+            plusconst = -min([i[1] for i in pre_activateList])
+            if plusconst != 0:
+                multiplyconst = 1 / (max([i[1] for i in pre_activateList]) + plusconst)
+            else:
+                multiplyconst = 1
+                pre_activateList = [[i[0], (i[1] + plusconst) * multiplyconst] for i in pre_activateList]
+            print(plusconst, multiplyconst)
+
             activateList=[]
             for toappend in pre_activateList:
                 if toappend not in activateList:
                     activateList.append(toappend)
+            activateList.sort(key=lambda x: x[1], reverse=True)
             for i in range(0,columns-3):
                 var_subject_activateRdio[i].set('')
 
@@ -479,26 +547,53 @@ def tkGUI(test_list):
                         disp = activateList[i][0][:5]+"..."
                     else:
                         disp = activateList[i][0]
+
                     subject_activateRdio[i].config(text =disp, relief=FLAT,onvalue=activateList[i][0],offvalue="",background = val_to_hex(activateList[i][1]),
                                                    command=lambda i=i,var_subject_activateRdio=var_subject_activateRdio,val=activateList[i][0]:whenPressed(val,activateList,btn=var_subject_activateRdio[i],mode='subject') if True else False)
 
 
-                    if activateList[i][0] in sub_rdiotoadd:
+                    if activateList[i][0] in (sub_rdiotoadd or inputList["subjectList"]):
                         var_subject_activateRdio[i].set(activateList[i][0])
+                else:
+                    reaction_activateRdio[i].config(text='', relief=FLAT, onvalue='', offvalue="",
+                                                    background=val_to_hex(0))
         def appendupdateSticky_reaction(addition=[]):
-            print("NOTIFY")
-            #append
-            for i in range(0,columns-3):
-                if var_reaction_activateRdio[i].get() != "" and var_reaction_activateRdio[i].get() not in inputList["reactionList"]:
-                    toappend = [var_reaction_activateRdio[i].get()]
-                    toappend=macro_expand(toappend)
-                    for mtoappend in toappend:
-                        inputList["reactionList"].append(mtoappend)
-                #var_reaction_activateRdio[i].set("")
+
             #update
+            #print('ActivateRec')
+            #print(list(set(inputList["reactionList"] + inputList["subjectList"]
+            #               + [i.get() for i in var_subject_activateRdio if i.get() != ''] + [i.get() for i in var_reaction_activateRdio if i.get() != '']+ addition))
+            #      )
             activateList = RNNinterface(list(set(inputList["reactionList"]+inputList["subjectList"]
                                                  +[i.get() for i in var_subject_activateRdio if i.get() != '']+[i.get() for i in var_reaction_activateRdio if i.get() != '']
-                                                 +addition)),[], json2network(), Mode='Activate')
+                                                 +addition+rec_rdiotoadd+sub_rdiotoadd)),[], json2network(), Mode='Activate')
+            try:
+                if os.path.isfile('NetworkDump_base.pkl'):
+                    activateList_base = RNNinterface(list(set(inputList["reactionList"] + inputList["subjectList"] + [i.get() for i in var_subject_activateRdio if i.get() != ''] + [i.get() for i in var_reaction_activateRdio if i.get() != '']
+                                                              + addition + rec_rdiotoadd + sub_rdiotoadd)), [],json2network(),
+                        Mode='Activate', PLKnetwork_PATH='NetworkDump_base.pkl')
+                    activateList = activateList_base + [i for i in activateList if
+                                                        (i[0] not in [j[0] for j in activateList_base]) or (
+                                                        i[0] in [j[0] for j in activateList_base] and not i[1] > 0)]
+                    activateList.sort(key=itemgetter(1), reverse=True)
+
+                    print('--------------------------------------------------------------')
+                    print("Replaced BY BASE")
+                    print(activateList_base)
+                    print('--------------------------------------------------------------')
+            except Exception as ex:
+                print(ex)
+
+            plusconst = -min([i[1] for i in activateList])
+            if plusconst != 0:
+                multiplyconst = 1 / (max([i[1] for i in activateList]) + plusconst)
+            else:
+                multiplyconst = 1
+            activateList = [[i[0], (i[1] + plusconst) * multiplyconst] for i in activateList]
+
+            #print("ActiveRecb")
+            #print(activateList)
+            #print("ActiveRecb")
             #add basic neurons to reaction
             #add rank
             autogened = autoGenList([i.get() for i in var_subject_activateRdio if i.get() != ""]).getminputLists()
@@ -508,8 +603,9 @@ def tkGUI(test_list):
             pre_activateList =  [["@Date&Time"]]+ranked_autogened
 
             try:
-                if len([i for i in activateList if i[1] != 0.5]) == 0:
-                    pre_activateList = pre_activateList+[[i["subjectList"][0],0.5] for i in previnputList if i["subjectList"]!=[]][::-1]+activateList
+                if len(set([i[1] for i in activateList])) == 1 and len(activateList) >1:
+                    pre_activateList = [[i["subjectList"][0],0] for i in previnputList if i["subjectList"]!=[]][::-1]+activateList
+                    pre_activateList.sort(key=lambda x: x[1], reverse=True)
                 else:
                     pre_activateList=pre_activateList+activateList
             except:
@@ -519,6 +615,7 @@ def tkGUI(test_list):
             for toappend in pre_activateList:
                 if toappend[0] not in [i[0] for i in activateList]:
                     activateList.append(toappend)
+            print('debug')
             for i in range(0,columns-3):
                 var_reaction_activateRdio[i].set('')
             for i in range(0,columns-3):
@@ -536,8 +633,10 @@ def tkGUI(test_list):
                     reaction_activateRdio[i].config(text =disp, relief=FLAT,onvalue=activateList[i][0],offvalue="",background =color,
                                                     command=lambda i=i,activateList=activateList,var_reaction_activateRdio=var_reaction_activateRdio,val=activateList[i][0]:whenPressed(val,activateList,btn=var_reaction_activateRdio[i],mode='reaction') if True else False)
 
-                    if activateList[i][0] in rec_rdiotoadd:
+                    if activateList[i][0] in (rec_rdiotoadd or inputList["reactionList"]):
                         var_reaction_activateRdio[i].set(activateList[i][0])
+                else:
+                    reaction_activateRdio[i].config(text='', relief=FLAT, onvalue='', offvalue="",background=val_to_hex(0))
 
         def whenPressed(mhash,activateList,btn='',mode=''):
             #updaterdio
@@ -562,7 +661,6 @@ def tkGUI(test_list):
                 sub_rdiotoadd = list(set(sub_rdiotoadd))
                 appendupdateSticky_subject(addition=sub_rdiotoadd)
                 appendupdateSticky_reaction(addition=rec_rdiotoadd)
-            print("UPDATE TEXT")
 
             if mhash != '':
                 #display text
@@ -602,7 +700,7 @@ def tkGUI(test_list):
         backspace_sub = tkinter.Button(f1, text ="←", command =lambda: backspace(mode = "Subject"))
         backspace_rec = tkinter.Button(f3, text ="←", command =lambda: backspace(mode = "Reaction"))
 
-        updateinputListHistory()
+
         previousStat = tkinter.Button(f3, text ="H", command =lambda :setprev_inputListHistory())
 
 
@@ -629,6 +727,16 @@ def tkGUI(test_list):
             except:
                 print("http error")
 
+        def SpeechRecognition(target=''):
+            class SpeechRecognition_Thread(threading.Thread):
+                def run(self):
+                    result = voice_recognize()
+                    inputList[target].append(result)
+                    appendInput()
+
+            mSpeechRecognition = SpeechRecognition_Thread()
+            mSpeechRecognition.start()
+
         def edittools(mode=''):
             if mode=='spaceX':
                 str = copy.deepcopy(textViewer.get(1.0,END).strip('\n').replace(' ',''))
@@ -636,6 +744,7 @@ def tkGUI(test_list):
                 textViewer.insert(1.0,str)
         #combobox,file
         comboSubject = AutocompleteCombobox(f2)
+
         #comboSubject = ComboBox(autocomplete=True)
         var_comboSub = StringVar()
         var_comboSub.trace('w',lambda name, index, mode: updatePrediction(mode="subjectList"))
@@ -673,11 +782,15 @@ def tkGUI(test_list):
         subjectT = tkinter.Text(f1, height=2, width=150)
         subjectT.bind("<Return>",lambda event=None:appendInput(mode="replaewithTextbox"))
         subjectT.bind("<Double-Button-1>",lambda event=None:appendInput(target="subjectList"))
+        subjectT.bind("<Button-1>", lambda event=None: SpeechRecognition(target="subjectList"))
+        subjectT.bind("<F1>", lambda event=None: reactionT.focus_force())
 
         #Reaction TextBox
         reactionT = tkinter.Text(f3, height=2, width=150)
         reactionT.bind("<Return>",lambda event=None:appendInput(mode="replaewithTextbox"))
         reactionT.bind("<Double-Button-1>",lambda event=None:appendInput(target="reactionList"))
+        reactionT.bind("<Button-1>", lambda event=None: SpeechRecognition(target="subjectList"))
+        reactionT.bind("<F1>", lambda event=None: onclick(Train=False))
 
         #Activate RadioBut
         subject_activateRdio = [0 for x in range(columns-1)]
@@ -751,7 +864,9 @@ def tkGUI(test_list):
         comboSubject.bind("<F1>",lambda event=None:comboReaction.focus_force())
         comboReaction.bind("<F1>",lambda event=None:onclick(Train=False))
         root.bind('<Return>', lambda event=None:appendInput())
+        updateinputListHistory()
         root.mainloop()
+        updateinputListHistory()
         pickle.dump(previnputList, open('searchHistory', 'wb'))
         return [inputList,TrainConfig]
 

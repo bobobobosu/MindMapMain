@@ -41,7 +41,7 @@ class inputMain:
         print(len(spl_inputReactionString))'''
         # 0 train: <sub>+<blank><blank>+<react1><blank><react1><blank><react2>...
         # 1 activate: <activate1><blank><activate1><blank><activate2>...
-        if len(spl_inputReactionString)==0:
+        if len(spl_inputReactionString)==0 and len(spl_inputSubjectString)!=0:
             self.trainORactivate_sta = 0
         else:
             self.trainORactivate_sta = 1

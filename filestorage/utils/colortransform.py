@@ -14,4 +14,7 @@ def val_to_hex(val):
         val = 0
     elif val>1:
         val = 1
-    return rgb_to_hex((0,(ceil(255*(1-(0.7*val/1)))),0))
+    if val == 0:
+        return rgb_to_hex((255,255,255))
+    else:
+        return rgb_to_hex((0,(ceil(255*(1-(0.7*val/1)))),0))
