@@ -596,7 +596,13 @@ def tkGUI(test_list):
             #print("ActiveRecb")
             #add basic neurons to reaction
             #add rank
-            autogened = autoGenList([i.get() for i in var_subject_activateRdio if i.get() != ""]).getminputLists()
+            if len(inputList["subjectList"]) >0:
+                inputList_subjectList = [inputList["subjectList"][-1]]
+            else:
+                inputList_subjectList = []
+            print('---------------')
+            print(inputList_subjectList+[i.get() for i in var_subject_activateRdio if i.get() != ""])
+            autogened = autoGenList(list(inputList_subjectList+[i.get() for i in var_subject_activateRdio if i.get() != ""])).getminputLists()
             ranked_autogened = []
             for mautogened in autogened:
                 ranked_autogened.append(mautogened)
@@ -782,14 +788,14 @@ def tkGUI(test_list):
         subjectT = tkinter.Text(f1, height=2, width=150)
         subjectT.bind("<Return>",lambda event=None:appendInput(mode="replaewithTextbox"))
         subjectT.bind("<Double-Button-1>",lambda event=None:appendInput(target="subjectList"))
-        subjectT.bind("<Button-1>", lambda event=None: SpeechRecognition(target="subjectList"))
+        #subjectT.bind("<Button-1>", lambda event=None: SpeechRecognition(target="subjectList"))
         subjectT.bind("<F1>", lambda event=None: reactionT.focus_force())
 
         #Reaction TextBox
         reactionT = tkinter.Text(f3, height=2, width=150)
         reactionT.bind("<Return>",lambda event=None:appendInput(mode="replaewithTextbox"))
         reactionT.bind("<Double-Button-1>",lambda event=None:appendInput(target="reactionList"))
-        reactionT.bind("<Button-1>", lambda event=None: SpeechRecognition(target="subjectList"))
+        #reactionT.bind("<Button-1>", lambda event=None: SpeechRecognition(target="reactionList"))
         reactionT.bind("<F1>", lambda event=None: onclick(Train=False))
 
         #Activate RadioBut

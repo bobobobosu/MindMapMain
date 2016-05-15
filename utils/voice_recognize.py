@@ -9,6 +9,7 @@ def voice_recognize():
     # obtain audio from the microphone
     r = sr.Recognizer()
     with sr.Microphone() as source:
+
         print("Say something!")
         audio = r.listen(source)
 
@@ -29,9 +30,26 @@ def voice_recognize():
         # for testing purposes, we're just using the default API key
         # to use another API key, use `r.recognize_google(audio, key="GOOGLE_SPEECH_RECOGNITION_API_KEY")`
         # instead of `r.recognize_google(audio)`
-        result =r.recognize_google(audio,language='zh-TW')
-        print("Google Speech Recognition thinks you said " + result)
-        return result
+        try:
+            result1 =r.recognize_google(audio,language='en-US')
+        except:
+            result1 = ''
+        try:
+            result2 = r.recognize_google(audio, language='zh-TW')
+        except:
+            result2 = ''
+        if result1 != ''  and result2 == '':
+            print("Google Speech Recognition thinks you said " + result1)
+            return result1
+        elif result2 != ''  and result1 == '':
+            print("Google Speech Recognition thinks you said " + result2)
+            return result2
+        elif result1 != ''  and result2 != '':
+            print("Google Speech Recognition thinks you said " + result1+','+result2)
+            return result2
+        else:
+            return ''
+
 
     except sr.UnknownValueError:
         print("Google Speech Recognition could not understand audio")
